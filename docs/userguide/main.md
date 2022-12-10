@@ -137,7 +137,7 @@ nodePools:
     some.other.config: foobar
 ```
 
-Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
+Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`. The value of `spec.general.additionalConfig` is also used for configuring the bootstrap pod. To overwrite the values of the bootstrap pod, set the field `spec.bootstrap.additionalConfig`.
 
 As of right now, the settings cannot be changed after the initial installation of the cluster (that feature is planned for the next version). If you need to change any settings please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
@@ -161,6 +161,21 @@ spec:
 This allows one to set up any of the [backend](https://opensearch.org/docs/latest/security-plugin/configuration/configuration/) authentication types for the dashboard.
 
 *The configuration must be valid or the dashboard will fail to start.*
+
+## Configuring a basePath
+
+When using OpenSearch behind a reverse proxy you have to configure a base path. This can be achieved by setting the base path field in the configuraiton of OpenSearch Dashboards. Behind the scenes the according configuration fields are set automatically in the opensearch.yml file.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  dashboards:
+    enable: true
+    basePath: "/logs"
+```
+
 
 ## TLS
 
@@ -400,6 +415,53 @@ spec:
           - "data"
 ```
 
+## Labels or Annotations on OpenSearch nodes
+You can add additional labels or annotations on the nodepool configuration.  This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint.
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "5Gi"
+      labels:
+        someLabelKey: someLabelValue
+      annotations:
+        someAnnotationKey: someAnnotationValue
+      NodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "data"
+        - "master"
+```
+
+## Priority class on OpenSearch nodes
+You can configure OpenSearch nodes to use a `PriorityClass` using the name of the priority class.  This is useful to prevent unwanted evictions of your OpenSearch nodes.
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "5Gi"
+      priorityClassName: somePriorityClassName
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "master"
+```
+
 ## Volume Expansion
 
 To increase the disk volume size set  the`diskSize` to desired value and re-apply the cluster yaml. This operation is expected to have no downtime and the cluster should be operational.
@@ -477,6 +539,79 @@ spec:
         secretName: secret-name
 ```
 
+## Custom cluster domain name
+
+If your cluster is configured with a custom domain name (default is `cluster.local`) you need to configure the operator accordingly in order for internal routing to work properly. This can be achieved by setting `manager.dnsBase` in the helm chart.
+
+```yaml
+manager:
+  # ...
+  dnsBase: custom.domain
+```
+
+## Add Labels or Annotations to the Dashboard Deployment
+You can add labels or annotations to the dashboard pod specification.  This is helpful if you want the dashboard to be part of a service mesh or integrate with other applications that rely on labels or annotations.
+
+```yaml
+spec:
+  dashboards:
+    enable: true
+    version: 1.3.1
+    replicas: 1
+    labels:
+      someLabelKey: someLabelValue
+    annotations:
+      someAnnotationKey: someAnnotationValue
+```
+
+## Custom Admin User
+
+In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps: 
+First you will have to create an `admin-credentials-secret` secret with your admin user configuration:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-credentials-secret
+type: Opaque
+data:
+  # admin
+  username: YWRtaW4=
+  # admin123
+  password: YWRtaW4xMjM=
+```
+
+Second you will have to create your own `securityconfig-secret` secret (take a look at `opensearch-operator/examples/securityconfig-secret.yaml` for an example).
+Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. In order to hash your password you can use that online bcrypt (https://bcrypt.online/?plain_text=admin123&cost_factor=12).
+```yaml
+      internal_users.yml: |-
+        _meta:
+          type: "internalusers"
+          config_version: 2
+        admin:
+          hash: "$2y$12$lJsHWchewGVcGlYgE3js/O4bkTZynETyXChAITarCHLz8cuaueIyq"   <------- change that hash to your new password hash
+          reserved: true
+          backend_roles:
+          - "admin"
+          description: "Demo admin user"
+  ```
+
+The last thing that you have to do is to add that security configuration to your opensearch-cluster.yaml:
+```yaml
+  security:
+    config:
+      adminCredentialsSecret:
+        name: admin-credentials-secret
+      securityConfigSecret:
+       name: securityconfig-secret
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+```
+  
+
 ## Opensearch Users
 
 It is possible to manage Opensearch users in Kubernetes with the operator.  The operator will not modify users that already exist.  You can create an example user as follows:
@@ -486,14 +621,13 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchUser
 metadata:
   name: sample-user
+  namespace: default
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   passwordFrom:
     name: sample-user-password
     key: password
-    namespace: default
   backendRoles:
   - kibanauser
 ```
@@ -509,10 +643,10 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchRole
 metadata:
   name: sample-role
+  namespace: default
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   clusterPermissions:
   - cluster_composite_ops
   - cluster_monitor
@@ -533,10 +667,10 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchUserRoleBinding
 metadata:
   name: sample-urb
+  namespace: default
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   users:
   - sample-user
   backendRoles:

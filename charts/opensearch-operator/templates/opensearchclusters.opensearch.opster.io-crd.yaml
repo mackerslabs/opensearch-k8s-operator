@@ -40,6 +40,12 @@ spec:
             properties:
               bootstrap:
                 properties:
+                  additionalConfig:
+                    additionalProperties:
+                      type: string
+                    description: Extra items to add to the opensearch.yml, defaults
+                      to General.AdditionalConfig
+                    type: object
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
                     properties:
@@ -2022,6 +2028,14 @@ spec:
                             type: array
                         type: object
                     type: object
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  basePath:
+                    description: Base Path for Opensearch Clusters running behind
+                      a reverse proxy
+                    type: string
                   enable:
                     type: boolean
                   env:
@@ -2155,6 +2169,10 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
                   nodeSelector:
                     additionalProperties:
                       type: string
@@ -3424,6 +3442,10 @@ spec:
                               type: array
                           type: object
                       type: object
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      type: object
                     component:
                       type: string
                     diskSize:
@@ -3612,6 +3634,8 @@ spec:
                               type: string
                           type: object
                       type: object
+                    priorityClassName:
+                      type: string
                     replicas:
                       format: int32
                       type: integer

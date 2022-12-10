@@ -65,9 +65,33 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 	labels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
 	}
+
+	// cr.Spec.Dashboards.labels
+	for key, value := range cr.Spec.Dashboards.Labels {
+		labels[key] = value
+	}
+
+	// If annotations are not provided as a func parameter, such as during automated testing
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	// cr.Spec.Dashboards.annotations
+	for annotationsKey, annotationsVal := range cr.Spec.Dashboards.Annotations {
+		annotations[annotationsKey] = annotationsVal
+	}
+
 	var probeScheme corev1.URIScheme = "HTTP"
 	if cr.Spec.Dashboards.Tls != nil && cr.Spec.Dashboards.Tls.Enable {
 		probeScheme = "HTTPS"
+	}
+
+	healthcheckPath := "/api/reporting/stats"
+
+	// Figure out if the opensearch cluster runs with a base path configured
+	if cr.Spec.Dashboards.BasePath != "" {
+		// If basePath is correctly setup, prefix healthcheck path
+		healthcheckPath = fmt.Sprintf("%s%s", cr.Spec.Dashboards.BasePath, healthcheckPath)
 	}
 
 	probe := corev1.Probe{
@@ -83,7 +107,13 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		  - name: Authorization
 		    value: Basic YWRtaW46YWRtaW4=*/
 
-		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/reporting/stats", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   healthcheckPath,
+				Port:   intstr.IntOrString{IntVal: port},
+				Scheme: probeScheme,
+			},
+		},
 	}
 
 	return &appsv1.Deployment{
@@ -138,6 +168,11 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
 	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
+
+	if cr.Spec.Dashboards.BasePath != "" {
+		config["server.basePath"] = cr.Spec.Dashboards.BasePath
+		config["server.rewriteBasePath"] = "true"
+	}
 
 	keys := make([]string, 0, len(config))
 

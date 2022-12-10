@@ -70,7 +70,9 @@ type NodePool struct {
 	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
 	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
 	Labels                    map[string]string                 `json:"labels,omitempty"`
+	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
+	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -103,6 +105,8 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
+	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
@@ -121,6 +125,8 @@ type DashboardsConfig struct {
 	Replicas   int32                       `json:"replicas"`
 	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version    string                      `json:"version"`
+	// Base Path for Opensearch Clusters running behind a reverse proxy
+	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
@@ -130,7 +136,12 @@ type DashboardsConfig struct {
 	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
 	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
+<<<<<<< HEAD
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
+=======
+	Labels                      map[string]string           `json:"labels,omitempty"`
+	Annotations                 map[string]string           `json:"annotations,omitempty"`
+>>>>>>> upstream/main
 }
 
 type DashboardsTlsConfig struct {
